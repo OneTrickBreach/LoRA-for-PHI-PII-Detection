@@ -1,0 +1,16 @@
+# Environment (uv-managed; recreated from requirements.txt)
+.venv/
+__pycache__/
+*.pyc
+
+# Generated data & model artifacts (regenerated reproducibly from seeds).
+# Keep the directories (via .gitkeep) but ignore their generated contents.
+data/raw/*.jsonl
+data/pools/*
+!data/raw/.gitkeep
+!data/pools/.gitkeep
+artifacts/
+
+# Local caches / scratch
+.cache/
+*.log

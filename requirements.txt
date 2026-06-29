@@ -1,0 +1,41 @@
+# PHI/PII LoRA POC — pinned dependencies
+# Python 3.10+ (developed/tested on 3.13.5).
+#
+# GPU NOTE: This machine has an RTX 5070 (Blackwell, sm_120), which requires a PyTorch
+# build compiled against CUDA 12.8. Install with uv's backend auto-selector, which picks
+# the cu128 wheel for this GPU (and the CPU wheel on CPU-only machines):
+#     uv pip install -r requirements.txt --torch-backend=auto
+# See README for the exact one-command setup.
+
+torch==2.7.1
+
+# Core modeling stack
+transformers==4.49.0
+peft==0.14.0
+datasets==3.2.0
+accelerate==1.3.0
+
+# Tokenizer backends for DeBERTa-v3 (sentencepiece model + protobuf for conversion)
+sentencepiece==0.2.0
+protobuf==5.29.3
+
+# Evaluation
+seqeval==1.2.2
+scikit-learn==1.6.1
+
+# Synthetic data
+faker==33.3.0
+
+# Presidio baseline (the bar to beat) + its spaCy NER backend
+presidio-analyzer==2.2.358
+presidio-anonymizer==2.2.358
+spacy==3.8.4
+click==8.4.2   # spaCy/typer runtime dep; not auto-resolved in this uv env
+# en_core_web_lg model is installed as a wheel via uv (see README) — `spacy download`
+# shells out to pip, which uv venvs don't ship.
+
+# Data / config / utils
+numpy==2.2.2
+pandas==2.2.3
+pyyaml==6.0.2
+tqdm==4.67.1

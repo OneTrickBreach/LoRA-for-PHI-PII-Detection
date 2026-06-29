@@ -118,6 +118,11 @@ URL, IP, AGE90, OTHER_ID`.
    `config.yaml`.
 6. **Findings live in files**, never only in chat — comparison table, error analysis, and memo are
    committed artifacts.
+7. **Environment is `uv`-managed, always.** Use `uv` for every environment and package operation —
+   never plain `pip`/`python` against system interpreters. The project venv lives at `.venv`
+   (Python 3.12, created with `uv venv`). Install with `uv pip install`; run any script through the
+   venv (`source .venv/Scripts/activate` then `python ...`, or `uv run python ...`). A stranger
+   reproducing this repo activates the uv venv before doing any work.
 
 ## 7. Anti-patterns — pre-solved pitfalls, do not reintroduce
 
