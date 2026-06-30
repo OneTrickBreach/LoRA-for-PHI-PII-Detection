@@ -17,7 +17,7 @@ rigor + recommendation. Full plan in `plan.md`; hard constraints in `rules.md`.
 | Day | Focus | Status |
 |----|-------|--------|
 | 1 | Setup + rubric internalization | ✅ |
-| 2 | Synthetic data v1 + alignment test | ⬜ |
+| 2 | Synthetic data v1 + alignment test | ✅ |
 | 3 | All three baselines (regex, Presidio, few-shot) | ⬜ |
 | 4 | First LoRA run + eval harness | ⬜ |
 | 5 | Harden generator + leakage check + README | ⬜ |
@@ -91,3 +91,82 @@ Build the insertion-based synthetic data generator (Faker + custom MRN/NPI/Plan-
 across the three record shapes, produce ~2k labeled rows, and **verify char-span→BIO alignment on 5
 hand-checked examples before any training** — a one-character offset bug would corrupt the whole label
 set.
+
+---
+
+## Day 2 — 2026-06-30 — Synthetic data v1 + alignment verification ✅
+
+**Branch note:** all of week 1's work now happens on the `week1` branch (off `main`), per request.
+
+**Objective (from plan §11):** build the insertion-based synthetic data generator, produce ~2k
+labeled rows across record shapes A/B/C, and prove the char-span→token alignment is exact before any
+model ever trains on it.
+
+### What was done
+- **Identifier generators** (`src/id_generators.py`): custom generators for every one of the 17 PHI
+  categories (MRN, NPI, Plan-ID, Device serial, Account, License, Vehicle, SSN, phone, email, URL,
+  IP, address, DOB, name, AGE90, other), each **paired with a deliberately-confusable non-PHI
+  look-alike** — order numbers, SSN-shaped case tickets, public support lines, infra IPs, build
+  dates, provider names, SKUs/version strings. The look-alikes are built to *trip the naive
+  regex/Presidio baselines on purpose*, which is how the model earns its keep on context.
+- **Carrier templates** (`src/templates.py`): clean prose templates (no PHI baked in) with a single
+  insertion slot, in positive and negative phrasings, with stable IDs that get partitioned across
+  splits.
+- **Generator** (`src/generate.py`): assembles the three record shapes — generic API request (A),
+  structured intake form (B), and log line (C) — inserting identifiers at known offsets so every
+  label is exact by construction. Produced **2,000 rows (50/50 positive/negative)**; all 17
+  categories represented.
+- **Alignment** (`src/align.py`): char-span→BIO via `offset_mapping`, special tokens set to -100, and
+  the inverse decoder for round-trip checks. The 5 hand-checked examples **all pass exact recovery**.
+- **Unit tests** (`tests/`, 22 tests): cover Day 1 (config/label-space/seed/LoRA-gotcha config) and
+  Day 2 (generator invariants, look-alike traps, alignment round-trip, split disjointness). All pass.
+
+### Definition of Done — MET ✅
+| DoD item | Result (verified) |
+|---|---|
+| Labeled JSONL loads | ✅ 2,000 records load; schema `{text, spans, contains_phi, record_type}` |
+| `contains_phi` derived, not hand-set | ✅ 0 invariant violations across all 2,000 records |
+| BIO alignment verified by hand | ✅ 5/5 hand-checked examples round-trip exactly (`reports/day2_alignment.md`) |
+| Offsets exact | ✅ every span's `text[start:end]` is the inserted identifier; 0 out-of-bounds |
+| Data integrity (leakage) | ✅ identifier **and** template pools are **0-overlap** across train/val/test |
+| Reproducible | ✅ same seed → byte-identical output files (checked) |
+
+Artifacts: `reports/day2_alignment.md` (token-by-token alignment tables) and
+`reports/day2_data_summary.md` (per-split, per-category span counts).
+
+### End-of-day self-review (brutal-truth pass) and outcome
+- **Ran a real leakage check, not a trusted assumption.** My first overlap script reported ~90
+  colliding identifiers between train and val — alarming. On inspection the *check* was wrong (it
+  split multi-word identifiers like names and addresses on spaces), not the data. Re-checked properly
+  (line-based): **identifier and template overlap is exactly 0 across all split pairs.** Logged the
+  gotcha so the Day-5 automated leakage check splits on newlines, not whitespace.
+- **Verified offsets the hard way:** every one of 2,000 records passes the "span text is exactly the
+  inserted value" invariant, plus a 30-record generate→align→decode integration test.
+- Minor cleanups to test code (removed a no-op string op, simplified an assert). No functional issues
+  found in the generator or alignment.
+
+### Honest status notes / limitations (not bugs — scheduled work)
+- **Thin per-category coverage in val/test.** Because carrier-template IDs are partitioned disjointly
+  across splits (the leakage requirement) and v1 has only a small template bank, the val/test splits
+  cover fewer categories than train (train: all 17; val: 4; test: 7, plus NAME/DATE/MRN guaranteed by
+  the intake-form shape). This is fine for the Day-4 pipeline smoke test; **Day 6 scales the template
+  bank and builds the dedicated hard test set that actually decides the verdict.**
+- **AGE90 is genuinely hard by construction.** Positive (age > 89) and negative (age ≤ 89) use
+  identical phrasing and differ only by the number, so the model must learn the HIPAA threshold, not
+  a keyword. If AGE90 recall lags later, this is why — a real finding to report, not a defect.
+- **NPI labeling is the documented conservative call.** A subject-linked NPI is labeled PHI; a
+  provider's NPI in professional context is a look-alike (not PHI), matching the rubric. Flagged so
+  the choice is visible.
+- Still no model trained — that is correct for Day 2. First LoRA numbers arrive Day 4.
+
+### Risks / watch-items
+- The disjoint-template constraint vs. per-category coverage tension will need a bigger, well-balanced
+  template bank in Day 6 to guarantee ≥300 positives per common category in *every* split.
+
+### Blockers
+None.
+
+### Next (Day 3)
+Implement and run all three baselines on the v1 set — regex (exact patterns from the plan), Presidio
+(the bar to beat), and the few-shot decoder — and produce the first baseline comparison so we can
+state Presidio's recall/precision before any LoRA number exists.

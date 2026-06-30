@@ -11,7 +11,20 @@ eval) — they are the ground truth.
   loads with a trainable LoRA classifier head, fast-tokenizer `offset_mapping` confirmed, rubric
   applied to 10 tricky examples. See [reports/day1_environment.md](reports/day1_environment.md) and
   [reports/rubric_examples.md](reports/rubric_examples.md).
-- Day 2–10: see the phase breakdown in [plan.md](plan.md) §11.
+- **Day 2 — DONE.** Insertion-based synthetic generator (Faker + custom ID generators) across record
+  shapes A/B/C; ~2k labeled rows; char-span→BIO alignment verified on 5 hand-checked examples;
+  entity/template-level split pools confirmed disjoint; 22 unit tests pass. See
+  [reports/day2_alignment.md](reports/day2_alignment.md) and
+  [reports/day2_data_summary.md](reports/day2_data_summary.md).
+- Day 3–10: see the phase breakdown in [plan.md](plan.md) §11.
+
+## Common commands
+```bash
+python -m src.sanity_check            # Day 1: environment + LoRA-gotcha checks
+python -m src.generate --version v1   # Day 2: generate synthetic data -> data/raw, data/pools
+python -m src.align                   # Day 2: verify char-span->BIO alignment (5 hand-checked)
+python -m pytest -q                   # run all unit tests (Day 1 + Day 2)
+```
 
 ## Environment setup (uv — required; see rules.md §6.7)
 
