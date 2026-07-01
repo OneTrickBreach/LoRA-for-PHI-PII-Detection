@@ -1,7 +1,22 @@
-"""Unified predict interface for every system (plan.md §4). Implemented Day 4.
+"""Unified predict interface for every system (plan.md §4).
 
-All systems (regex / presidio / fewshot / lora) expose predict(text) -> list[{start,end,type}]
-so the eval harness scores them identically. Also exposes score-threshold control for the
-LoRA system to support recall-first operating-point selection (plan.md §10).
+Every system exposes `predict(text) -> [{"start","end","type"}]` so the eval harness scores them
+identically. Day 3 wires the three baselines; Day 4 adds the LoRA system (with a score threshold for
+recall-first operating-point selection).
 """
-# TODO(Day 4): dispatch to each system; LoRA token-logits -> BIO -> merged char spans + scores.
+from __future__ import annotations
+
+
+def load_predictor(system: str, cfg: dict | None = None):
+    if system == "regex":
+        from src.baselines.regex_baseline import RegexBaseline
+        return RegexBaseline(cfg)
+    if system == "presidio":
+        from src.baselines.presidio_baseline import PresidioBaseline
+        return PresidioBaseline()
+    if system == "fewshot":
+        from src.baselines.fewshot_baseline import FewShotBaseline
+        return FewShotBaseline(cfg)
+    if system == "lora":
+        raise NotImplementedError("LoRA predictor is wired on Day 4 (train_lora.py first).")
+    raise ValueError(f"unknown system: {system}")

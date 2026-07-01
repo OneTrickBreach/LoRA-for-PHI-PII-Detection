@@ -53,6 +53,7 @@ model:
   base: microsoft/deberta-v3-base
   max_length: 256
   decoder_alt: null    # stretch only; never the baseline
+  fewshot: Qwen/Qwen2.5-1.5B-Instruct   # small instruct decoder for the §8.3 few-shot baseline
 
 # ---- LoRA (plan.md §9 / rules.md §4). modules_to_save is MANDATORY. ----
 lora:

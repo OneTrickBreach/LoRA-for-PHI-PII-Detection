@@ -16,14 +16,20 @@ eval) — they are the ground truth.
   entity/template-level split pools confirmed disjoint; 22 unit tests pass. See
   [reports/day2_alignment.md](reports/day2_alignment.md) and
   [reports/day2_data_summary.md](reports/day2_data_summary.md).
-- Day 3–10: see the phase breakdown in [plan.md](plan.md) §11.
+- **Day 3 — DONE.** All three baselines (regex, Presidio, few-shot Qwen2.5-1.5B) implemented and
+  scored on the v1 test set via a shared eval harness (overlap/exact span P/R/F1, per-category
+  recall, binary recall, FP-on-negatives, measured latency). **Presidio (the bar): overlap recall
+  0.825, precision 0.213.** 35 unit tests pass. See
+  [reports/comparison_table.md](reports/comparison_table.md).
+- Day 4–10: see the phase breakdown in [plan.md](plan.md) §11.
 
 ## Common commands
 ```bash
 python -m src.sanity_check            # Day 1: environment + LoRA-gotcha checks
 python -m src.generate --version v1   # Day 2: generate synthetic data -> data/raw, data/pools
 python -m src.align                   # Day 2: verify char-span->BIO alignment (5 hand-checked)
-python -m pytest -q                   # run all unit tests (Day 1 + Day 2)
+python -m src.evaluate --systems regex presidio fewshot --split test   # Day 3: baseline table
+python -m pytest -q                   # run all unit tests
 ```
 
 ## Environment setup (uv — required; see rules.md §6.7)

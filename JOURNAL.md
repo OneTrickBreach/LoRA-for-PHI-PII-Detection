@@ -18,7 +18,7 @@ rigor + recommendation. Full plan in `plan.md`; hard constraints in `rules.md`.
 |----|-------|--------|
 | 1 | Setup + rubric internalization | ✅ |
 | 2 | Synthetic data v1 + alignment test | ✅ |
-| 3 | All three baselines (regex, Presidio, few-shot) | ⬜ |
+| 3 | All three baselines (regex, Presidio, few-shot) | ✅ |
 | 4 | First LoRA run + eval harness | ⬜ |
 | 5 | Harden generator + leakage check + README | ⬜ |
 | 6 | Data v2 (scale + hard test set) | ⬜ |
@@ -170,3 +170,86 @@ None.
 Implement and run all three baselines on the v1 set — regex (exact patterns from the plan), Presidio
 (the bar to beat), and the few-shot decoder — and produce the first baseline comparison so we can
 state Presidio's recall/precision before any LoRA number exists.
+
+---
+
+## Day 3 — 2026-07-01 — All three baselines + eval harness ✅
+
+**Objective (from plan §11):** implement the regex, Presidio, and few-shot baselines, score them on
+the v1 test set through one shared evaluation harness, and be able to state Presidio's
+recall/precision — the bar LoRA must beat — before any LoRA number exists.
+
+### What was done
+- **Regex baseline** (`src/baselines/regex_baseline.py`): the exact six patterns from the plan (SSN,
+  email, phone, IP, date, MRN) — not a strawman.
+- **Presidio baseline** (`src/baselines/presidio_baseline.py`): `presidio-analyzer` out of the box
+  (spaCy `en_core_web_lg`), with its entity labels mapped to our 17-category schema.
+- **Few-shot baseline** (`src/baselines/fewshot_baseline.py`): the exact §8.3 prompt on a small
+  instruct decoder (Qwen2.5-1.5B-Instruct), greedy decoding; returned JSON spans located back to
+  char offsets. JSON parsing factored into a pure, unit-tested function.
+- **Shared eval harness** (`src/evaluate.py` + `src/predict.py`): one command scores any system with
+  span P/R/F1 on **overlap** (lead) and strict-exact, **per-category recall**, **binary recall**,
+  **false positives on negative (look-alike-only) records**, and **measured latency**. Emits
+  `reports/comparison_table.md` (+ a JSON dump).
+- **13 new unit tests** (8 baseline behavior + few-shot parsing edge cases, 5 metric-math); full
+  suite now **35 tests, all green**.
+
+### Results on the v1 test set (n=200) — the headline
+| system | span-R (overlap) | span-P (overlap) | binary-R | FP on negatives | latency ms/rec |
+|---|---|---|---|---|---|
+| regex | 0.584 | 0.503 | 0.840 | 75 | 0.03 |
+| **presidio (the bar)** | **0.825** | **0.213** | 0.980 | 308 | 11.0 |
+| fewshot (Qwen-1.5B) | 0.482 | 0.860 | 0.260 | 9 | 445 |
+
+**Presidio's recall/precision: 0.825 / 0.213 (overlap).** This is the number to beat — LoRA must
+match Presidio's recall (target ≥0.97) while dramatically improving precision.
+
+### What the per-category breakdown reveals (this is the story)
+- **Presidio catches names/dates/URLs at 1.00 but misses MRN entirely (0.00)** — it has no
+  domain-identifier recognizer (MRN/NPI/PLAN_ID/DEVICE_ID/etc.). Its precision is only 0.213 because
+  it over-flags by our rubric: provider names, standalone states, org addresses, and software build
+  dates all get tagged (308 false positives on look-alike-only records). That gap — miss domain IDs,
+  over-flag look-alikes — is precisely the opening for a rubric-trained model.
+- **Regex** is fast and precise-ish on formatted IDs but blind to names and URLs (0.00) and only
+  catches MRN when it carries the literal "MRN" prefix (0.58).
+- **Few-shot** is the opposite of Presidio: high precision (0.86), poor recall (0.48) and very low
+  binary recall (0.26), at 445 ms/record.
+
+### End-of-day self-review (brutal-truth pass) and outcome
+- **The one suspicious number — few-shot binary recall of 0.26 — was investigated before trusting
+  it.** I ran a 6-record diagnostic printing the model's raw output vs. parsed spans vs. gold. Result:
+  it is **genuine model behavior, not a parsing bug.** The decoder extracts PHI well from the
+  intake-form named fields (shape B: NAME/DATE/MRN at 1.00) but **misses PHI buried in free text** —
+  the `complaint` field, the API-request JSON payload (shape A), and log lines (shape C), where it
+  mostly returns `[]`. Parsing correctly handled the model's ```json fenced output and every item it
+  returned. So few-shot's per-category zeros on PHONE/EMAIL/URL/IP are real: those categories live in
+  free text here. This is a real finding for the memo: zero-training decoders are unreliable for
+  recall on realistic noisy records.
+- **Latency is measured, not estimated** (rules §5.6): regex 0.03 ms, Presidio 11 ms (under the
+  50 ms target), few-shot 445 ms (≈9× over — a finding; a decoder is not viable for low-latency
+  inline scanning).
+- No functional bugs found in the harness; the metric math is covered by direct unit tests
+  (one-to-one greedy matching, overlap vs exact, per-category, binary, FP counting).
+
+### Honest status notes / caveats
+- **Scores are on the thin-coverage v1 test split** (7 of 17 categories present). Absolute numbers
+  will move once the Day-6 hard test set exists; today's purpose is a directional baseline and the
+  Presidio bar, both of which are established.
+- **Matched-recall comparison (recall ≥ 0.97) is not applied yet** — that needs a tunable score
+  threshold, which only the LoRA system has. Day 4 introduces it; today reports each system at its
+  natural operating point.
+- Presidio's low precision is partly a rubric-definition mismatch (it isn't wrong about "a person
+  name is a name" — it just doesn't know our provider/patient distinction). That is a fair and
+  informative comparison, and the reason a task-specific model is expected to win.
+
+### Risks / watch-items
+- Few-shot latency and recall make it a non-contender; the real race is **LoRA vs. Presidio**, which
+  starts Day 4.
+
+### Blockers
+None.
+
+### Next (Day 4)
+First LoRA fine-tune on DeBERTa-v3 with the §9 config (**`modules_to_save=["classifier"]`**), wire
+the LoRA system into `predict.py`/`evaluate.py`, and produce the first one-command comparison of LoRA
+vs. all three baselines. (If training sits at chance accuracy, check `modules_to_save` first.)

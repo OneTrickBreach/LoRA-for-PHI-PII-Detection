@@ -1,0 +1,128 @@
+[
+  {
+    "name": "regex",
+    "overlap": {
+      "recall": 0.5843373493975904,
+      "precision": 0.5025906735751295,
+      "f1": 0.5403899721448467,
+      "tp": 97,
+      "fp": 96,
+      "fn": 69
+    },
+    "exact": {
+      "recall": 0.5301204819277109,
+      "precision": 0.45595854922279794,
+      "f1": 0.4902506963788301,
+      "tp": 88,
+      "fp": 105,
+      "fn": 78
+    },
+    "binary_recall": 0.84,
+    "fp_on_negatives": 75,
+    "per_category_recall": {
+      "NAME": 0.0,
+      "ADDRESS": null,
+      "DATE": 0.6538461538461539,
+      "SSN": null,
+      "MRN": 0.5769230769230769,
+      "NPI": null,
+      "PLAN_ID": null,
+      "ACCOUNT": null,
+      "LICENSE": null,
+      "DEVICE_ID": null,
+      "VEHICLE_ID": null,
+      "PHONE": 1.0,
+      "EMAIL": 1.0,
+      "URL": 0.0,
+      "IP": 1.0,
+      "AGE90": null,
+      "OTHER_ID": null
+    },
+    "latency_ms_mean": 0.02822200025548227,
+    "latency_ms_p50": 0.029399991035461426
+  },
+  {
+    "name": "presidio",
+    "overlap": {
+      "recall": 0.8253012048192772,
+      "precision": 0.2127329192546584,
+      "f1": 0.33827160493827163,
+      "tp": 137,
+      "fp": 507,
+      "fn": 29
+    },
+    "exact": {
+      "recall": 0.5602409638554217,
+      "precision": 0.14440993788819875,
+      "f1": 0.2296296296296296,
+      "tp": 93,
+      "fp": 551,
+      "fn": 73
+    },
+    "binary_recall": 0.98,
+    "fp_on_negatives": 308,
+    "per_category_recall": {
+      "NAME": 1.0,
+      "ADDRESS": null,
+      "DATE": 1.0,
+      "SSN": null,
+      "MRN": 0.0,
+      "NPI": null,
+      "PLAN_ID": null,
+      "ACCOUNT": null,
+      "LICENSE": null,
+      "DEVICE_ID": null,
+      "VEHICLE_ID": null,
+      "PHONE": 0.8571428571428571,
+      "EMAIL": 1.0,
+      "URL": 1.0,
+      "IP": 1.0,
+      "AGE90": null,
+      "OTHER_ID": null
+    },
+    "latency_ms_mean": 11.012656000093557,
+    "latency_ms_p50": 10.231099993688986
+  },
+  {
+    "name": "fewshot",
+    "overlap": {
+      "recall": 0.4819277108433735,
+      "precision": 0.8602150537634409,
+      "f1": 0.6177606177606177,
+      "tp": 80,
+      "fp": 13,
+      "fn": 86
+    },
+    "exact": {
+      "recall": 0.4819277108433735,
+      "precision": 0.8602150537634409,
+      "f1": 0.6177606177606177,
+      "tp": 80,
+      "fp": 13,
+      "fn": 86
+    },
+    "binary_recall": 0.26,
+    "fp_on_negatives": 9,
+    "per_category_recall": {
+      "NAME": 1.0,
+      "ADDRESS": null,
+      "DATE": 1.0,
+      "SSN": null,
+      "MRN": 1.0,
+      "NPI": null,
+      "PLAN_ID": null,
+      "ACCOUNT": null,
+      "LICENSE": null,
+      "DEVICE_ID": null,
+      "VEHICLE_ID": null,
+      "PHONE": 0.0,
+      "EMAIL": 0.0,
+      "URL": 0.08695652173913043,
+      "IP": 0.0,
+      "AGE90": null,
+      "OTHER_ID": null
+    },
+    "latency_ms_mean": 445.15838499806705,
+    "latency_ms_p50": 144.28759997827
+  }
+]
