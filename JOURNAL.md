@@ -19,8 +19,8 @@ rigor + recommendation. Full plan in `plan.md`; hard constraints in `rules.md`.
 | 1 | Setup + rubric internalization | ✅ |
 | 2 | Synthetic data v1 + alignment test | ✅ |
 | 3 | All three baselines (regex, Presidio, few-shot) | ✅ |
-| 4 | First LoRA run + eval harness | ⬜ |
-| 5 | Harden generator + leakage check + README | ⬜ |
+| 4 | First LoRA run + eval harness | ✅ |
+| 5 | Harden generator + leakage check + README | ✅ |
 | 6 | Data v2 (scale + hard test set) | ⬜ |
 | 7 | Retrain + error analysis | ⬜ |
 | 8 | Hyperparameter sweep + recall-first thresholding | ⬜ |
@@ -253,3 +253,184 @@ None.
 First LoRA fine-tune on DeBERTa-v3 with the §9 config (**`modules_to_save=["classifier"]`**), wire
 the LoRA system into `predict.py`/`evaluate.py`, and produce the first one-command comparison of LoRA
 vs. all three baselines. (If training sits at chance accuracy, check `modules_to_save` first.)
+
+---
+
+## Day 4 — 2026-07-03 — First LoRA fine-tune + full comparison harness ✅
+
+> Two days of work today (Day 4 + Day 5) since tomorrow is the Independence Day holiday.
+
+**Objective (from plan §11):** fine-tune DeBERTa-v3 with LoRA using the §9 config, wire it into the
+harness, and produce one command that compares LoRA against all three baselines.
+
+### What was done
+- **`src/train_lora.py`**: LoRA fine-tune with the exact §9 config — `target_modules="all-linear"`,
+  **`modules_to_save=["classifier"]`**, bf16 on GPU (with a hard `assert torch.cuda.is_available()`
+  so it can never silently fall back to CPU, as promised). Best checkpoint selected on **validation
+  recall** (recall leads). Logs seed, device, measured train time / GPU memory / adapter size.
+- **`src/predict.py`**: LoRA predictor with a decision **threshold** for recall-first operating
+  points; per-token scores cached so a threshold sweep is cheap. `select_threshold_for_recall`
+  picks the operating point on **val** (never on the eval split).
+- **`src/evaluate.py`**: LoRA integrated; reports it at argmax and at the recall-first point.
+- **`scripts/run_all.sh`**: one command — generate → leakage check → train → score all systems.
+- **5 new unit tests** for the threshold/decoding logic (no model load required).
+
+### Result (v1 test, n=200; overlap unless noted)
+| system | span-R | span-P | binary-R | FP(neg) | latency |
+|---|---|---|---|---|---|
+| presidio (the bar) | 0.825 | 0.213 | 0.980 | 308 | 16 ms |
+| **lora (argmax)** | 0.741 | **0.976** | 0.640 | **0** | 37 ms |
+| lora (recall-first, t=0.01) | 0.813 | 0.726 | 0.840 | 2 | 33 ms |
+
+- **The win:** LoRA precision **0.976 vs Presidio 0.213**, with **0 false positives** on look-alike
+  records (Presidio had 308). At ~matched recall (0.81 vs 0.83) LoRA's precision is **3.4× Presidio's**.
+  Per-category, **LoRA catches MRN at 1.00 where Presidio scores 0.00** — the domain-identifier gap.
+  > **Audit correction (see the Week-1 Audit entry below):** this 0.976 was a *non-reproducible*
+  > training run. After fixing training determinism, the reproducible LoRA precision is lower (~0.78);
+  > the qualitative win over Presidio (much higher precision, 0 FP on look-alikes, catches MRN) holds,
+  > but use the audited numbers as the record.
+- **Latency:** 33–37 ms/record on GPU — **meets** the < 50 ms target.
+- **The gap (reported, not hidden):** LoRA recall is **0.74 (argmax) / 0.81 (lowest threshold)** —
+  it does **NOT** reach the 0.97 success bar on v1, and thresholding alone can't get there (val
+  recall caps ~0.72).
+
+### DoD — MET ✅
+One command (`run_all.sh` / `python -m src.evaluate --systems ... lora`) produces the full comparison
+table. Training is confirmed on GPU. The classifier head **learned** (loss 0.32→0.03, acc 0.977 — not
+chance), so `modules_to_save` is doing its job.
+
+### Brutal-truth review (Day 4)
+- **A 0.976 precision demanded verification.** I inspected LoRA predictions vs. gold on real records.
+  It is genuine: LoRA correctly extracts named-field PHI and returns **nothing** on negative records
+  (support emails, org addresses, support phones) — it truly learned the look-alikes. **The recall
+  gap is a data-coverage issue, not a bug:** LoRA (like few-shot) misses PHI **buried in free text** —
+  email/IP/phone in the `complaint` field, IP inside the shape-A JSON payload and shape-C log lines.
+  Per-category confirms it: PHONE 0.29 and **IP 0.00** at argmax.
+- **Fixed a real defect found in review:** decoded LoRA spans began one character early (DeBERTa's
+  sentencepiece offset includes the leading space → `" Angela Martinez"`). Added `trim_spans`; strict-
+  exact F1 improved (LoRA exact-F1 0.795) and redaction boundaries are now clean. Overlap unaffected.
+- Fixed a stale auto-generated table caption.
+
+### Next (Day 5) — done same day, below.
+
+---
+
+## Day 5 — 2026-07-03 — Automated leakage check + reproducibility + mid-project review ✅
+
+**Objective (from plan §11):** enforce entity/template-level splits with an automated overlap check,
+make the data regenerate reproducibly, get the README to a stranger-can-reproduce state, and do a
+mid-project self-review against the spec.
+
+### What was done
+- **`src/leakage_check.py`** (rules §3.3, mandatory): asserts **zero overlap** of PHI identifiers and
+  carrier template IDs across splits, exits non-zero on any leak. Identifiers are derived from the
+  **JSONL ground truth** (the actual span substrings), not just the pools bookkeeping, so a generator
+  bug can't hide. AGE90 is excluded by design (an age must be allowed in every split). Compares whole
+  lines — deliberately **not** splitting multi-word values on spaces (the Day-2 self-review lesson).
+- **Result: PASS** — 0 identifier and 0 template overlap across train/val/test
+  (`reports/day5_leakage_check.md`).
+- **`run_all.sh`** now runs the leakage check between generation and training, so the pipeline
+  **refuses to train on leaky data**.
+- **README**: added the full week-1 reproduction path (one-command `run_all.sh`), all per-day
+  commands, and the current status.
+- **Mid-project self-review** (`reports/day5_selfreview.md`): a rules.md compliance checklist (all
+  green), plan progress, the honest position on the success bar, the diagnosed recall gap, and the
+  documented conservative decisions (AGE90 sharing, NPI, tokenizer trim, thin v1 coverage).
+- **3 new unit tests** for the leakage check (AGE90 exclusion, overlap detection, real-data-clean).
+
+### DoD — MET ✅
+- Data regenerates reproducibly (same seed → byte-identical, verified Day 2 and unchanged).
+- **Overlap check passes.**
+- README lets a stranger reproduce Week 1 end-to-end.
+- Full suite: **43 unit tests green.**
+
+### Brutal-truth review (Day 5, sequential over all work)
+- Re-ran the whole suite (43 green) and the leakage check (clean) after the Day-4 changes — no
+  regressions. Reproducibility, `contains_phi` derivation, offset correctness, alignment round-trip,
+  and split disjointness all still hold.
+- The self-review checklist surfaced no rule violations. The one substantive open item is honest and
+  known: **recall is below the 0.97 bar on v1** — carried into Week 2 as the central risk, with the
+  hybrid (Presidio/regex pre-filter → LoRA) already scheduled for Day 9 as the fallback.
+
+### Honest status notes / caveats
+- All numbers are on the **thin v1 test split** and are directional. The **hard test set that decides
+  the verdict does not exist yet** (Day 6).
+- IP recall of 0.00 for LoRA is the most striking single gap — the model isn't recognizing session
+  IPs at all on v1 (too few/again free-text). First thing to watch after the Day-6 scale-up.
+
+### Blockers
+None.
+
+### Next (Day 6)
+Scale the generator to 10–20k with a **larger, balanced template bank** (≥300 positives per common
+category **in every split**, especially free-text PHONE/EMAIL/IP), build the dedicated **hard test
+set** (look-alike-heavy negatives + unusual-format positives) that decides the verdict, and re-run the
+leakage check on the new splits.
+
+---
+
+## Week 1 Audit & Summary — 2026-07-03
+
+End-of-week brutal-truth audit of all Day 1–5 work: I ran the full one-command pipeline as an
+integration test, launched **two independent review agents** (data-generation path; modeling/eval
+path), and did my own targeted verification. Findings were triaged and the real ones fixed.
+
+### The most important finding: training was not reproducible
+Running `run_all.sh` retrained the model and LoRA's precision came out **0.780**, not the **0.976**
+my Day-4 entry reported — a large swing from the *same seed*. Root cause: **CUDA nondeterminism**,
+amplified by the tiny v1 dataset. This violates the reproducibility rule (§1.7). **Fix:** cuDNN
+deterministic + `torch.use_deterministic_algorithms` + `CUBLAS_WORKSPACE_CONFIG` + `data_seed`.
+**Verified:** two retrains now produce byte-identical val metrics (recall 0.604, precision 0.498).
+Training time rose 27 s → 52 s (measured, acceptable). The Day-4 "0.976" is corrected to the
+reproducible number below.
+
+### All fixes applied this audit
+| Severity | Area | Fix |
+|---|---|---|
+| bug | reproducibility | Deterministic training; verified identical across reruns |
+| bug | eval fairness | Merge overlapping same-type predictions uniformly (was inflating baselines' FP) |
+| bug | eval | Latency now honors `latency_warmup` (cold-CUDA record no longer skews the mean) |
+| bug | alignment test | Strengthened check caught a real EMAIL off-by-one (44-61 → 44-62) in the hand examples |
+| correctness | eval | Order-independent best-overlap matching; per-category derived from the same matched pairs |
+| correctness | data gen | Identifier-uniqueness exhaustion now **raises** instead of silently accepting a duplicate |
+| correctness | training | Warns if a gold span is lost to `max_length` truncation (matters at Day-6 scale) |
+| correctness | predict | `LoraPredictor` asserts the saved `label_list.json` matches config (id-mismap guard) |
+
+Both review agents confirmed the generator/alignment core is empirically sound (0 offset/BIO/leakage
+errors over 1,850 spans; determinism holds). Documented-not-fixed (by design / Week-2): Presidio's
+OOTB mapping surfaces some non-PHI as PHI (the comparison point), NAME/DATE/MRN over-representation in
+v1 (Day-6 balancing), and best-checkpoint selection on token-recall vs span-overlap (Day-8).
+
+### Audited, reproducible results (v1 test, n=200; overlap)
+| system | span-R | span-P | binary-R | FP(neg) | latency |
+|---|---|---|---|---|---|
+| regex | 0.584 | 0.503 | 0.840 | 75 | 0.03 ms |
+| **presidio (the bar)** | 0.825 | 0.213 | 0.980 | 308 | 9 ms |
+| fewshot (Qwen-1.5B) | 0.476 | 0.849 | 0.260 | 9 | 409 ms |
+| **lora (argmax)** | 0.771 | **0.780** | 0.700 | **4** | 26 ms |
+| lora (recall-first, t=0.01) | 0.849 | 0.613 | 0.880 | 9 | 25 ms |
+
+### Week 1 verdict (honest)
+- **LoRA clearly beats Presidio on precision** at comparable recall: at matched recall (0.849 vs
+  0.825) LoRA precision is **0.613 vs 0.213 (~2.9×)**, with **4–9 false positives vs 308**, and it
+  **catches MRN (1.00) where Presidio scores 0.00**. It also **meets the < 50 ms latency target**
+  (26 ms) where few-shot (409 ms) cannot. The core thesis — a rubric-trained model earns its place
+  over Presidio — is supported directionally.
+- **The 0.97 recall bar is NOT met on v1** (LoRA recall 0.77 argmax / 0.85 at the lowest threshold).
+  Diagnosed cause: LoRA misses PHI **buried in free text** (PHONE/EMAIL/IP in the complaint field and
+  JSON/log payloads), a v1 data-coverage limitation, not a modeling bug. This is Day-6's target.
+- All numbers are on the **thin v1 test split** and are **directional**; the hard test set that
+  decides the verdict is built Day 6.
+
+### Week 1 deliverables — all DoDs met
+Day 1 env + rubric ✓ · Day 2 generator + verified alignment ✓ · Day 3 three baselines + harness ✓ ·
+Day 4 first LoRA + one-command comparison ✓ · Day 5 leakage check + reproducibility + README ✓.
+**45 unit tests green; leakage check clean; pipeline reproducible end-to-end.**
+
+### Risks carried into Week 2
+1. **Recall is the whole game.** If Day-6 scale + balanced free-text coverage doesn't lift recall to
+   0.97, the honest recommendation may be the **hybrid** (Presidio/regex pre-filter → LoRA), already
+   on the Day-9 agenda.
+2. **Synthetic ≠ real** — memo must caveat + give a real-data validation plan (Day 10).
+3. Small-data seed sensitivity is now controlled (deterministic) but the Day-8 sweep should still
+   check a couple of seeds so the reported config isn't a fragile point estimate.

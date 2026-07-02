@@ -14,7 +14,18 @@ else
   exit 1
 fi
 
-# TODO(Day 4): python -m src.generate --version v1
-# TODO(Day 4): python -m src.train_lora
-# TODO(Day 4): python -m src.evaluate --systems regex presidio fewshot lora --split hard_test
-echo "run_all.sh is a stub until Day 4."
+SPLIT="${1:-test}"   # eval split (default: test; Day 6+ uses hard_test)
+
+echo "==> [1/4] Generate synthetic data (v1)"
+python -m src.generate --version v1
+
+echo "==> [2/4] Leakage check (must pass before any number is trusted)"
+python -m src.leakage_check     # exits non-zero on any cross-split overlap -> stops the run
+
+echo "==> [3/4] Train LoRA on DeBERTa-v3"
+python -m src.train_lora
+
+echo "==> [4/4] Score all systems on '${SPLIT}' -> reports/comparison_table.md"
+python -m src.evaluate --systems regex presidio fewshot lora --split "${SPLIT}"
+
+echo "Done. See reports/comparison_table.md"

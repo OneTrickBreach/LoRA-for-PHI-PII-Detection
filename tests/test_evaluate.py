@@ -1,5 +1,28 @@
 """Day-3 tests: span-matching metrics (overlap vs exact, one-to-one, PRF, per-category, binary)."""
-from src.evaluate import _exact, _overlap, match_spans, prf, score_system
+from src.evaluate import (_exact, _overlap, match_overlap,
+                          merge_overlapping_same_type, match_spans, prf,
+                          score_system)
+
+
+def test_merge_overlapping_same_type():
+    spans = [{"start": 0, "end": 10, "type": "NAME"},
+             {"start": 8, "end": 15, "type": "NAME"},   # overlaps first -> merge to 0-15
+             {"start": 8, "end": 15, "type": "DATE"},   # different type -> kept
+             {"start": 15, "end": 20, "type": "NAME"}]  # touches (not overlaps) -> kept
+    out = merge_overlapping_same_type(spans)
+    assert {"start": 0, "end": 15, "type": "NAME"} in out
+    assert {"start": 15, "end": 20, "type": "NAME"} in out
+    assert {"start": 8, "end": 15, "type": "DATE"} in out
+    assert len(out) == 3
+
+
+def test_match_overlap_picks_largest_overlap():
+    gold = [{"start": 0, "end": 10, "type": "NAME"}]
+    pred = [{"start": 0, "end": 2, "type": "NAME"},   # small overlap
+            {"start": 0, "end": 9, "type": "NAME"}]   # large overlap -> should be chosen
+    pairs, used = match_overlap(gold, pred)
+    assert pairs == [(0, 1)]
+    assert used == [False, True]   # pred[0] is a false positive
 
 
 def test_overlap_vs_exact_predicate():

@@ -19,18 +19,37 @@ eval) — they are the ground truth.
 - **Day 3 — DONE.** All three baselines (regex, Presidio, few-shot Qwen2.5-1.5B) implemented and
   scored on the v1 test set via a shared eval harness (overlap/exact span P/R/F1, per-category
   recall, binary recall, FP-on-negatives, measured latency). **Presidio (the bar): overlap recall
-  0.825, precision 0.213.** 35 unit tests pass. See
-  [reports/comparison_table.md](reports/comparison_table.md).
-- Day 4–10: see the phase breakdown in [plan.md](plan.md) §11.
+  0.825, precision 0.213.** See [reports/comparison_table.md](reports/comparison_table.md).
+- **Day 4 — DONE.** First LoRA fine-tune on DeBERTa-v3 (classifier head learns; trains on GPU,
+  deterministic, 21.9 MB adapter) + LoRA wired into the harness with recall-first thresholding.
+  **At matched recall (0.85 vs 0.83), LoRA precision 0.61 vs Presidio 0.21 (~3×)**, with 4–9 false
+  positives vs 308 and MRN recall 1.00 vs 0.00, latency 26 ms (< 50 ms target); recall does **not**
+  yet reach the 0.97 bar on v1 (a finding — Day 6 scales the data). See
+  [reports/day4_training.md](reports/day4_training.md).
+- **Day 5 — DONE.** Automated leakage/overlap check passes (0 identifier & template overlap across
+  splits), data regenerates reproducibly, README week-1 reproduction, mid-project self-review. See
+  [reports/day5_leakage_check.md](reports/day5_leakage_check.md) and
+  [reports/day5_selfreview.md](reports/day5_selfreview.md).
+- Day 6–10: see the phase breakdown in [plan.md](plan.md) §11.
 
 ## Common commands
 ```bash
 python -m src.sanity_check            # Day 1: environment + LoRA-gotcha checks
 python -m src.generate --version v1   # Day 2: generate synthetic data -> data/raw, data/pools
 python -m src.align                   # Day 2: verify char-span->BIO alignment (5 hand-checked)
-python -m src.evaluate --systems regex presidio fewshot --split test   # Day 3: baseline table
+python -m src.leakage_check           # Day 5: assert zero entity/template overlap across splits
+python -m src.train_lora              # Day 4: LoRA fine-tune -> artifacts/lora_adapter
+python -m src.evaluate --systems regex presidio fewshot lora --split test   # full comparison
 python -m pytest -q                   # run all unit tests
 ```
+
+## Reproduce Week 1 end-to-end (one command)
+```bash
+bash scripts/run_all.sh               # generate -> leakage-safe splits -> train LoRA -> score all
+                                      # systems -> reports/comparison_table.md
+```
+Everything is seeded (`config.yaml: seed`), so a repeat run reproduces byte-identical data. Generated
+data and the trained adapter are git-ignored and regenerated from seed.
 
 ## Environment setup (uv — required; see rules.md §6.7)
 

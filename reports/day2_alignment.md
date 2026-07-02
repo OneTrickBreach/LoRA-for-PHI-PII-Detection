@@ -104,7 +104,7 @@ Each example is aligned to BIO tokens and round-tripped back to char spans. PASS
 | `[SEP]` | 0-0 `` | -100 (special) |
 
 - gold `(216) 555-0148` (PHONE) -> recovered: [('PHONE', ' (216) 555-0148')]
-- gold `jane.doe@gmail.co` (EMAIL) -> recovered: [('EMAIL', ' jane.doe@gmail.com')]
+- gold `jane.doe@gmail.com` (EMAIL) -> recovered: [('EMAIL', ' jane.doe@gmail.com')]
 
 ### Example 4 — PASS
 > Home address on file: 728 Oak Street, Akron, OH 44312.

@@ -69,9 +69,14 @@ class SplitGen:
                     regen=None) -> None:
         if phi_type is not None and poolable:
             tries = 0
-            while value in self.used_phi and regen is not None and tries < 25:
+            while value in self.used_phi and regen is not None and tries < 100:
                 value = regen()
                 tries += 1
+            if value in self.used_phi:
+                # rules.md §3.3: never silently accept a duplicate identifier (silent leakage).
+                raise RuntimeError(
+                    f"identifier generator exhausted uniqueness for a {phi_type} value; "
+                    "increase generator cardinality or reduce dataset size — do not accept dupes.")
             self.used_phi.add(value)
             self.identifiers.add(value)
         em.slot(value, phi_type)
@@ -79,7 +84,9 @@ class SplitGen:
     def carrier(self, em: Emitter, tmpl: dict) -> None:
         """Render one carrier sentence: literal prefix + slot value + literal suffix."""
         kind, positive = tmpl["kind"], tmpl["polarity"] == "pos"
-        pre, post = tmpl["text"].split("{x}")
+        parts = tmpl["text"].split("{x}")
+        assert len(parts) == 2, f"template {tmpl['id']} must have exactly one {{x}} slot"
+        pre, post = parts
         em.lit(pre)
         value, phi_type, poolable = self.gens.value_for(kind, positive)
         self._emit_value(em, value, phi_type, poolable,

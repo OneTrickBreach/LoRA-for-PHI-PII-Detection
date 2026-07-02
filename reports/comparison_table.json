@@ -38,26 +38,26 @@
       "AGE90": null,
       "OTHER_ID": null
     },
-    "latency_ms_mean": 0.02822200025548227,
-    "latency_ms_p50": 0.029399991035461426
+    "latency_ms_mean": 0.03089897486811074,
+    "latency_ms_p50": 0.03190001007169485
   },
   {
     "name": "presidio",
     "overlap": {
       "recall": 0.8253012048192772,
-      "precision": 0.2127329192546584,
-      "f1": 0.33827160493827163,
+      "precision": 0.21339563862928349,
+      "f1": 0.33910891089108913,
       "tp": 137,
-      "fp": 507,
+      "fp": 505,
       "fn": 29
     },
     "exact": {
-      "recall": 0.5602409638554217,
-      "precision": 0.14440993788819875,
-      "f1": 0.2296296296296296,
-      "tp": 93,
-      "fp": 551,
-      "fn": 73
+      "recall": 0.572289156626506,
+      "precision": 0.14797507788161993,
+      "f1": 0.23514851485148516,
+      "tp": 95,
+      "fp": 547,
+      "fn": 71
     },
     "binary_recall": 0.98,
     "fp_on_negatives": 308,
@@ -80,26 +80,26 @@
       "AGE90": null,
       "OTHER_ID": null
     },
-    "latency_ms_mean": 11.012656000093557,
-    "latency_ms_p50": 10.231099993688986
+    "latency_ms_mean": 8.998218462175618,
+    "latency_ms_p50": 9.130899998126552
   },
   {
     "name": "fewshot",
     "overlap": {
-      "recall": 0.4819277108433735,
-      "precision": 0.8602150537634409,
-      "f1": 0.6177606177606177,
-      "tp": 80,
-      "fp": 13,
-      "fn": 86
+      "recall": 0.4759036144578313,
+      "precision": 0.8494623655913979,
+      "f1": 0.61003861003861,
+      "tp": 79,
+      "fp": 14,
+      "fn": 87
     },
     "exact": {
-      "recall": 0.4819277108433735,
-      "precision": 0.8602150537634409,
-      "f1": 0.6177606177606177,
-      "tp": 80,
-      "fp": 13,
-      "fn": 86
+      "recall": 0.4759036144578313,
+      "precision": 0.8494623655913979,
+      "f1": 0.61003861003861,
+      "tp": 79,
+      "fp": 14,
+      "fn": 87
     },
     "binary_recall": 0.26,
     "fp_on_negatives": 9,
@@ -117,12 +117,104 @@
       "VEHICLE_ID": null,
       "PHONE": 0.0,
       "EMAIL": 0.0,
-      "URL": 0.08695652173913043,
+      "URL": 0.043478260869565216,
       "IP": 0.0,
       "AGE90": null,
       "OTHER_ID": null
     },
-    "latency_ms_mean": 445.15838499806705,
-    "latency_ms_p50": 144.28759997827
+    "latency_ms_mean": 408.8963733333796,
+    "latency_ms_p50": 131.4694999891799
+  },
+  {
+    "name": "lora(argmax)",
+    "overlap": {
+      "recall": 0.7710843373493976,
+      "precision": 0.7804878048780488,
+      "f1": 0.7757575757575758,
+      "tp": 128,
+      "fp": 36,
+      "fn": 38
+    },
+    "exact": {
+      "recall": 0.6204819277108434,
+      "precision": 0.6280487804878049,
+      "f1": 0.6242424242424243,
+      "tp": 103,
+      "fp": 61,
+      "fn": 63
+    },
+    "binary_recall": 0.7,
+    "fp_on_negatives": 4,
+    "per_category_recall": {
+      "NAME": 1.0,
+      "ADDRESS": null,
+      "DATE": 1.0,
+      "SSN": null,
+      "MRN": 1.0,
+      "NPI": null,
+      "PLAN_ID": null,
+      "ACCOUNT": null,
+      "LICENSE": null,
+      "DEVICE_ID": null,
+      "VEHICLE_ID": null,
+      "PHONE": 0.5238095238095238,
+      "EMAIL": 0.875,
+      "URL": 1.0,
+      "IP": 0.07142857142857142,
+      "AGE90": null,
+      "OTHER_ID": null
+    },
+    "latency_ms_mean": 25.976233333438778,
+    "latency_ms_p50": 24.38300001085736
+  },
+  {
+    "name": "lora(R>=0.97@t=0.01 (target NOT met on val))",
+    "overlap": {
+      "recall": 0.8493975903614458,
+      "precision": 0.6130434782608696,
+      "f1": 0.7121212121212122,
+      "tp": 141,
+      "fp": 89,
+      "fn": 25
+    },
+    "exact": {
+      "recall": 0.6867469879518072,
+      "precision": 0.4956521739130435,
+      "f1": 0.5757575757575758,
+      "tp": 114,
+      "fp": 116,
+      "fn": 52
+    },
+    "binary_recall": 0.88,
+    "fp_on_negatives": 9,
+    "per_category_recall": {
+      "NAME": 1.0,
+      "ADDRESS": null,
+      "DATE": 1.0,
+      "SSN": null,
+      "MRN": 1.0,
+      "NPI": null,
+      "PLAN_ID": null,
+      "ACCOUNT": null,
+      "LICENSE": null,
+      "DEVICE_ID": null,
+      "VEHICLE_ID": null,
+      "PHONE": 1.0,
+      "EMAIL": 0.875,
+      "URL": 1.0,
+      "IP": 0.17857142857142858,
+      "AGE90": null,
+      "OTHER_ID": null
+    },
+    "latency_ms_mean": 24.84433076938447,
+    "latency_ms_p50": 24.302399979205802,
+    "threshold_selection": {
+      "on": "val",
+      "threshold": 0.01,
+      "recall": 0.8071065989847716,
+      "precision": 0.6115384615384616,
+      "f1": 0.6958424507658643,
+      "met": false
+    }
   }
 ]

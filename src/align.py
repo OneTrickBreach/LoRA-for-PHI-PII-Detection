@@ -113,40 +113,42 @@ def spans_overlap(a: dict, b: dict) -> bool:
 
 # ---- Hand-checked verification (Day-2 DoD) -------------------------------------------------
 
+# Each span carries an `exp` = the exact substring it must select, so verification checks offset
+# EQUALITY (not just non-emptiness).
 HAND_EXAMPLES: list[dict] = [
     {
         "text": "Patient John Reyes, DOB 03/14/1981, MRN A55213, seen by Dr. Smith.",
         "spans": [
-            {"start": 8, "end": 18, "type": "NAME"},
-            {"start": 24, "end": 34, "type": "DATE"},
-            {"start": 40, "end": 46, "type": "MRN"},
+            {"start": 8, "end": 18, "type": "NAME", "exp": "John Reyes"},
+            {"start": 24, "end": 34, "type": "DATE", "exp": "03/14/1981"},
+            {"start": 40, "end": 46, "type": "MRN", "exp": "A55213"},
         ],
     },
     {
         "text": "Member SSN 402-11-9837; plan ID UHC9921047733 on the policy.",
         "spans": [
-            {"start": 11, "end": 22, "type": "SSN"},
-            {"start": 32, "end": 45, "type": "PLAN_ID"},
+            {"start": 11, "end": 22, "type": "SSN", "exp": "402-11-9837"},
+            {"start": 32, "end": 45, "type": "PLAN_ID", "exp": "UHC9921047733"},
         ],
     },
     {
         "text": "Call the patient at (216) 555-0148 or email jane.doe@gmail.com.",
         "spans": [
-            {"start": 20, "end": 34, "type": "PHONE"},
-            {"start": 44, "end": 61, "type": "EMAIL"},
+            {"start": 20, "end": 34, "type": "PHONE", "exp": "(216) 555-0148"},
+            {"start": 44, "end": 62, "type": "EMAIL", "exp": "jane.doe@gmail.com"},
         ],
     },
     {
         "text": "Home address on file: 728 Oak Street, Akron, OH 44312.",
         "spans": [
-            {"start": 22, "end": 53, "type": "ADDRESS"},
+            {"start": 22, "end": 53, "type": "ADDRESS", "exp": "728 Oak Street, Akron, OH 44312"},
         ],
     },
     {
         "text": "Patient is 92 years old; session from 73.118.42.9 logged.",
         "spans": [
-            {"start": 11, "end": 13, "type": "AGE90"},
-            {"start": 38, "end": 49, "type": "IP"},
+            {"start": 11, "end": 13, "type": "AGE90", "exp": "92"},
+            {"start": 38, "end": 49, "type": "IP", "exp": "73.118.42.9"},
         ],
     },
 ]
@@ -174,8 +176,8 @@ def verify_examples(tokenizer, examples: list[dict] | None = None,
         offsets, labels = enc["offset_mapping"], enc["labels"]
         recovered = bio_to_char_spans(offsets, labels, id2label)
 
-        # (a) gold spans are exactly the substrings we claim
-        substr_ok = all(text[g["start"]:g["end"]] for g in gold)
+        # (a) gold spans select EXACTLY the expected substring (offset equality, not just non-empty)
+        substr_ok = all(text[g["start"]:g["end"]] == g["exp"] for g in gold)
         # (b) every gold recovered, and every recovered matches some gold (no spurious)
         gold_hit = all(any(spans_overlap(g, r) for r in recovered) for g in gold)
         rec_clean = all(any(spans_overlap(r, g) for g in gold) for r in recovered)
