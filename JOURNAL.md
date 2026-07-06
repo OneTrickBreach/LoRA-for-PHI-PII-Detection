@@ -21,7 +21,7 @@ rigor + recommendation. Full plan in `plan.md`; hard constraints in `rules.md`.
 | 3 | All three baselines (regex, Presidio, few-shot) | ✅ |
 | 4 | First LoRA run + eval harness | ✅ |
 | 5 | Harden generator + leakage check + README | ✅ |
-| 6 | Data v2 (scale + hard test set) | ⬜ |
+| 6 | Data v2 (scale + hard test set) | ✅ |
 | 7 | Retrain + error analysis | ⬜ |
 | 8 | Hyperparameter sweep + recall-first thresholding | ⬜ |
 | 9 | Final eval + recommendation (incl. hybrid) | ⬜ |
@@ -434,3 +434,70 @@ Day 4 first LoRA + one-command comparison ✓ · Day 5 leakage check + reproduci
 2. **Synthetic ≠ real** — memo must caveat + give a real-data validation plan (Day 10).
 3. Small-data seed sensitivity is now controlled (deterministic) but the Day-8 sweep should still
    check a couple of seeds so the reported config isn't a fragile point estimate.
+
+---
+
+# WEEK 2
+
+## Day 6 — 2026-07-07 — Data v2 (scale + hard test set) ✅
+
+**Git:** merged `week1` → `main`; Week-2 work is on the new `week2` branch (off main).
+
+**Objective (from plan §11):** scale to 10–20k, build the dedicated hard test set, and confirm
+per-category coverage and clean splits — directly targeting the Week-1 gaps (thin val/test coverage,
+LoRA missing free-text PHI).
+
+### What was done
+- **Bigger, balanced template bank** (`templates.py`): 4 pos + 4 neg carrier templates **per category**
+  (up from 2), with distinct natural phrasings.
+- **Per-kind split partitioning** (`generate.py`): templates are now partitioned *per category* across
+  train/val/test, so **every split has ≥1 pos and ≥1 neg template for all 17 categories** — the
+  Week-1 "val/test only cover 4–7 categories" problem is gone. IDs stay disjoint across splits.
+- **Balanced positive sampling**: positives are drawn round-robin over categories, so each category
+  gets roughly equal representation instead of NAME/DATE/MRN dominating.
+- **Dedicated hard test set** (`hard_test.jsonl`, 1,500 rows): a *separate* hard template bank (IDs
+  never in train/val/test) with **hard positives** (PHI in terse/unusual positions and free text,
+  mixed with look-alikes) and **hard negatives** (dense look-alikes — SSN-shaped tickets, infra IPs,
+  support lines, build dates, asset tags). This is the set that decides the verdict (rules §3.5).
+- **Coverage report** (`reports/day6_data_summary.md`) with a per-category × per-split table and an
+  automatic ≥300-per-category target check.
+
+### Result — scale + coverage (all measured)
+- **16,000 main records** (train 12,800 / val 1,600 / test 1,600) + **1,500 hard_test** = 17,500 total,
+  50/50 positive/negative.
+- **Every category ≥300 positives in train** (target met); NAME/DATE/MRN higher (~2,500) by design
+  (intake-form shape), the other 14 balanced at ~376.
+- **val/test now cover all 17 categories** (~47 each); hard_test covers all 17 (~44 each).
+- **Leakage check: 0 identifier and 0 template overlap across all 4 splits** (incl. hard_test).
+
+### DoD — MET ✅
+Final train/val/test **+ hard test set**, documented recipe (generator + config + coverage report),
+regenerates reproducibly (same seed → byte-identical), overlap check passes.
+
+### Brutal-truth review (Day 6)
+- **Reproducibility verified the hard way:** regenerated v2 twice → byte-identical files. Ran the
+  full invariant sweep over all **17,500 records / 16,889 spans → 0 violations** (contains_phi
+  derived, every span's `text[start:end]` exact and in-bounds).
+- **Spot-checked hard_test:** positives are genuinely terse/low-cue (e.g. `acct ACCT-3576-8005,
+  balance due.`), negatives are dense look-alikes with infra IPs / asset tags that *will* trip
+  regex/Presidio — i.e. the set is actually hard.
+- **Fixed a gap found in review:** the hard-negative bank was missing an `email` look-alike; added it.
+- **Noted (acceptable, not a bug):** NAME/DATE/MRN are ~7× more frequent than other categories because
+  the intake-form shape always carries them. All categories still clear the ≥300 target, and
+  per-category metrics are unaffected by the imbalance; aggregate recall simply weights common PHI
+  more (which is realistic). Will keep an eye on it if any single category underperforms Day 7.
+- **50 unit tests green** (5 new: per-kind coverage, disjointness, round-robin balance, hard-bank
+  validity/disjointness, hard pos/neg span behavior).
+
+### Honest status notes
+- **v2 data is generated but the model is NOT retrained yet** — that's Day 7. The currently committed
+  adapter and `comparison_table.md` are still from **v1** and will be refreshed Day 7 (data/adapters
+  are git-ignored, so nothing stale is committed; the v1 reports remain as the Week-1 record).
+
+### Blockers
+None.
+
+### Next (Day 7)
+Retrain LoRA on v2, run the full comparison on the **hard test set** (the real verdict), and write the
+error analysis: which categories LoRA now catches that regex/Presidio miss (and vice versa), and
+whether the bigger free-text coverage lifts recall toward 0.97.

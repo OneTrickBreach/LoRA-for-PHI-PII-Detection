@@ -30,16 +30,20 @@ eval) — they are the ground truth.
   splits), data regenerates reproducibly, README week-1 reproduction, mid-project self-review. See
   [reports/day5_leakage_check.md](reports/day5_leakage_check.md) and
   [reports/day5_selfreview.md](reports/day5_selfreview.md).
-- Day 6–10: see the phase breakdown in [plan.md](plan.md) §11.
+- **Day 6 — DONE.** Scaled to **16k main (train/val/test) + 1.5k dedicated hard test set** via a
+  balanced, per-category-partitioned template bank. Every category ≥300 in train; val/test/hard_test
+  cover all 17 categories; **0 leakage across all 4 splits**; regenerates reproducibly. See
+  [reports/day6_data_summary.md](reports/day6_data_summary.md). (Retrain on v2 is Day 7.)
+- Day 7–10: see the phase breakdown in [plan.md](plan.md) §11.
 
 ## Common commands
 ```bash
 python -m src.sanity_check            # Day 1: environment + LoRA-gotcha checks
-python -m src.generate --version v1   # Day 2: generate synthetic data -> data/raw, data/pools
+python -m src.generate --version v2   # Day 6: full-scale data (16k) + hard test set -> data/
 python -m src.align                   # Day 2: verify char-span->BIO alignment (5 hand-checked)
 python -m src.leakage_check           # Day 5: assert zero entity/template overlap across splits
 python -m src.train_lora              # Day 4: LoRA fine-tune -> artifacts/lora_adapter
-python -m src.evaluate --systems regex presidio fewshot lora --split test   # full comparison
+python -m src.evaluate --systems regex presidio fewshot lora --split hard_test   # full comparison
 python -m pytest -q                   # run all unit tests
 ```
 

@@ -21,7 +21,8 @@ from pathlib import Path
 
 from src.config import REPO_ROOT, load_config, set_global_seed
 from src.id_generators import IdGen
-from src.templates import CARRIER_TEMPLATES
+from src.templates import (CARRIER_TEMPLATES, HARD_NEG_TEMPLATES,
+                           HARD_POS_TEMPLATES)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -64,6 +65,18 @@ class SplitGen:
         self.used_phi = used_phi          # GLOBAL across splits -> guarantees disjoint identifiers
         self.identifiers: set[str] = set()  # poolable PHI values used in THIS split
         self.template_ids: set[str] = set()
+        # Round-robin over kinds so positives are BALANCED per category (fix Week-1 skew).
+        self.pos_by_kind: dict[str, list[dict]] = {}
+        for t in pos_ids:
+            self.pos_by_kind.setdefault(t["kind"], []).append(t)
+        self.pos_kinds = sorted(self.pos_by_kind)
+        self._rr = 0
+
+    def next_pos_template(self) -> dict:
+        """Next positive template, cycling kinds so every category gets roughly equal positives."""
+        kind = self.pos_kinds[self._rr % len(self.pos_kinds)]
+        self._rr += 1
+        return self.sel.choice(self.pos_by_kind[kind])
 
     def _emit_value(self, em: Emitter, value: str, phi_type: str | None, poolable: bool,
                     regen=None) -> None:
@@ -100,7 +113,8 @@ class SplitGen:
 
     def pick_sentences(self, positive: bool) -> list[dict]:
         if positive:
-            sents = [self.sel.choice(self.pos_templates)]
+            # round-robin primary positive (balanced categories) + some look-alikes (hard positives)
+            sents = [self.next_pos_template()]
             for _ in range(self.sel.randint(0, 2)):
                 sents.append(self.sel.choice(self.neg_templates))
         else:
@@ -143,7 +157,7 @@ def build_B(sg: SplitGen, positive: bool) -> tuple[str, list[dict]]:
         em.lit(" | state: ")
         em.lit(sg.gens.state_abbr())                   # standalone state, NOT PHI
         em.lit(" | complaint: ")
-        sg.carrier(em, sg.sel.choice(sg.pos_templates + sg.neg_templates))
+        sg.carrier(em, sg.next_pos_template())   # balanced extra PHI category in free text
         em.lit(" | provider: Dr. ")
         em.lit(sg.gens.provider_last())                # provider name, NOT PHI
     else:
@@ -178,25 +192,60 @@ SHAPES = {
 
 
 def partition_template_ids(sel: random.Random, fracs: dict) -> dict[str, dict]:
-    """Disjointly partition carrier template IDs across splits, keeping pos & neg in each split."""
-    pos = [t for t in CARRIER_TEMPLATES if t["polarity"] == "pos"]
-    neg = [t for t in CARRIER_TEMPLATES if t["polarity"] == "neg"]
-    sel.shuffle(pos)
-    sel.shuffle(neg)
-
-    def cut(items):
-        n = len(items)
-        n_tr = int(round(n * fracs["train"]))
-        n_va = int(round(n * fracs["val"]))
-        return {"train": items[:n_tr], "val": items[n_tr:n_tr + n_va],
-                "test": items[n_tr + n_va:]}
-
-    cp, cn = cut(pos), cut(neg)
-    out = {}
+    """Partition carrier template IDs PER KIND across train/val/test so every split has ≥1 pos and
+    ≥1 neg template for EVERY category (fixes Week-1 thin val/test coverage), while keeping template
+    IDs disjoint across splits (rules.md §3.1). With 4 templates/kind: val=1, test=1, train=rest.
+    """
+    out = {sp: {"pos": [], "neg": []} for sp in ("train", "val", "test")}
+    by_kind: dict[tuple[str, str], list[dict]] = {}
+    for t in CARRIER_TEMPLATES:
+        by_kind.setdefault((t["kind"], t["polarity"]), []).append(t)
+    for (kind, pol), items in by_kind.items():
+        items = list(items)
+        sel.shuffle(items)
+        assert len(items) >= 3, f"need ≥3 {pol} templates for kind {kind} to cover all splits"
+        out["val"][pol].append(items[0])
+        out["test"][pol].append(items[1])
+        out["train"][pol].extend(items[2:])
     for sp in ("train", "val", "test"):
-        out[sp] = {"pos": cp[sp], "neg": cn[sp]}
-        assert cp[sp] and cn[sp], f"split {sp} missing pos/neg templates; adjust counts"
+        assert out[sp]["pos"] and out[sp]["neg"], f"split {sp} missing pos/neg templates"
     return out
+
+
+def _generate_split(split, n, sg, shapes, pos_frac, sel, raw_dir, pool_dir) -> dict:
+    n_pos = int(round(n * pos_frac))
+    flags = [True] * n_pos + [False] * (n - n_pos)
+    sel.shuffle(flags)
+
+    records, cat_counter, shape_counter = [], Counter(), Counter()
+    for positive in flags:
+        shape = sel.choice(shapes)
+        builder, rtype = SHAPES[shape]
+        text, spans = builder(sg, positive)
+        if rtype is None:  # shape B
+            rtype = "intake_form" if positive else "facility_form"
+        rec = {"text": text, "spans": spans,
+               "contains_phi": 1 if spans else 0, "record_type": rtype}
+        assert rec["contains_phi"] == (1 if positive else 0), "contains_phi mismatch"
+        for s in spans:
+            assert 0 <= s["start"] < s["end"] <= len(text), "span out of bounds"
+            cat_counter[s["type"]] += 1
+        shape_counter[shape] += 1
+        records.append(rec)
+
+    with open(raw_dir / f"{split}.jsonl", "w", encoding="utf-8") as fh:
+        for rec in records:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    (pool_dir / f"{split}_identifiers.txt").write_text(
+        "\n".join(sorted(sg.identifiers)) + "\n", encoding="utf-8")
+    (pool_dir / f"{split}_templates.txt").write_text(
+        "\n".join(sorted(sg.template_ids)) + "\n", encoding="utf-8")
+
+    print(f"[{split}] {n} records ({sum(flags)} pos / {n - sum(flags)} neg), "
+          f"{len(sg.identifiers)} identifiers, {len(sg.template_ids)} templates")
+    return {"n": n, "positives": sum(flags), "negatives": n - sum(flags),
+            "identifiers": len(sg.identifiers), "templates": len(sg.template_ids),
+            "by_category": dict(cat_counter), "by_shape": dict(shape_counter)}
 
 
 def generate(version: str) -> None:
@@ -217,58 +266,31 @@ def generate(version: str) -> None:
     raw_dir.mkdir(parents=True, exist_ok=True)
     pool_dir.mkdir(parents=True, exist_ok=True)
 
-    split_counts = {sp: int(round(total * fracs[sp])) for sp in ("train", "val", "test")}
     summary: dict[str, dict] = {}
-
-    for split, n in split_counts.items():
+    for split in ("train", "val", "test"):
+        n = int(round(total * fracs[split]))
         sg = SplitGen(gens, sel, parts[split]["pos"], parts[split]["neg"], used_phi)
-        n_pos = int(round(n * pos_frac))
-        flags = [True] * n_pos + [False] * (n - n_pos)
-        sel.shuffle(flags)
+        summary[split] = _generate_split(split, n, sg, shapes, pos_frac, sel, raw_dir, pool_dir)
 
-        records = []
-        cat_counter: Counter = Counter()
-        shape_counter: Counter = Counter()
-        for positive in flags:
-            shape = sel.choice(shapes)
-            builder, rtype = SHAPES[shape]
-            text, spans = builder(sg, positive)
-            if rtype is None:  # shape B
-                rtype = "intake_form" if positive else "facility_form"
-            rec = {"text": text, "spans": spans,
-                   "contains_phi": 1 if spans else 0, "record_type": rtype}
-            # invariants (rules.md §3.7 + offset correctness)
-            assert rec["contains_phi"] == (1 if positive else 0), "contains_phi mismatch"
-            for s in spans:
-                assert 0 <= s["start"] < s["end"] <= len(text), "span out of bounds"
-                cat_counter[s["type"]] += 1
-            shape_counter[shape] += 1
-            records.append(rec)
-
-        out_path = raw_dir / f"{split}.jsonl"
-        with open(out_path, "w", encoding="utf-8") as fh:
-            for rec in records:
-                fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
-
-        (pool_dir / f"{split}_identifiers.txt").write_text(
-            "\n".join(sorted(sg.identifiers)) + "\n", encoding="utf-8")
-        (pool_dir / f"{split}_templates.txt").write_text(
-            "\n".join(sorted(sg.template_ids)) + "\n", encoding="utf-8")
-
-        summary[split] = {
-            "n": n, "positives": sum(flags), "negatives": n - sum(flags),
-            "identifiers": len(sg.identifiers), "templates": len(sg.template_ids),
-            "by_category": dict(cat_counter), "by_shape": dict(shape_counter),
-        }
-        print(f"[{split}] {n} records ({sum(flags)} pos / {n - sum(flags)} neg), "
-              f"{len(sg.identifiers)} identifiers, {len(sg.template_ids)} templates")
+    # Dedicated HARD TEST SET (rules.md §3.5) — the split that decides the verdict. Uses the separate
+    # hard bank (disjoint template IDs) + free-text shapes (A/C), weighted to hard positives (PHI in
+    # terse/unusual positions, mixed with look-alikes) and hard negatives (dense look-alikes).
+    if version == "v2":
+        n_hard = cfg["data"]["hard_test_size"]
+        sg = SplitGen(gens, sel, HARD_POS_TEMPLATES, HARD_NEG_TEMPLATES, used_phi)
+        summary["hard_test"] = _generate_split("hard_test", n_hard, sg, ["A", "C"],
+                                               pos_frac, sel, raw_dir, pool_dir)
 
     _write_summary(cfg, version, seed, summary)
 
 
 def _write_summary(cfg, version, seed, summary) -> None:
-    lines = [f"# Day 2 — Synthetic Data Summary ({version})\n",
-             f"- seed: `{seed}`  | label types: `{len(cfg['label_types'])}`",
+    day = "Day 6" if version == "v2" else "Day 2"
+    target = cfg["data"]["min_positives_per_category"]
+    types = cfg["label_types"]
+    lines = [f"# {day} — Synthetic Data Summary ({version})\n",
+             f"- seed: `{seed}`  | label types: `{len(types)}`  | "
+             f"per-category target (train): ≥{target}",
              f"- shapes: {cfg['data']['record_shapes']}  | positive fraction: "
              f"{cfg['data']['positive_fraction']}\n"]
     agg: Counter = Counter()
@@ -281,12 +303,22 @@ def _write_summary(cfg, version, seed, summary) -> None:
         lines.append(f"- positive spans by category: "
                      f"{dict(sorted(s['by_category'].items()))}\n")
         agg.update(s["by_category"])
-    lines.append("## All-splits positive spans by category")
-    lines.append(f"{dict(sorted(agg.items()))}\n")
-    missing = [t for t in cfg["label_types"] if t not in agg]
-    lines.append(f"- categories with zero positives (v1; coverage hardened Day 6): "
-                 f"{missing or 'none'}\n")
-    out = Path(REPO_ROOT) / "reports" / "day2_data_summary.md"
+
+    # Per-category coverage table across splits + target check on train.
+    lines.append("## Per-category positive coverage by split\n")
+    lines.append("| category | " + " | ".join(summary.keys()) + " |")
+    lines.append("|" + "---|" * (len(summary) + 1))
+    for t in types:
+        cells = [str(summary[sp]["by_category"].get(t, 0)) for sp in summary]
+        lines.append(f"| {t} | " + " | ".join(cells) + " |")
+
+    lines.append("")
+    missing = [t for t in types if t not in agg]
+    lines.append(f"- categories with zero positives anywhere: {missing or 'none'}")
+    if "train" in summary:
+        short = [t for t in types if summary["train"]["by_category"].get(t, 0) < target]
+        lines.append(f"- train categories below the ≥{target} target: {short or 'none'}")
+    out = Path(REPO_ROOT) / "reports" / f"{'day6' if version == 'v2' else 'day2'}_data_summary.md"
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Wrote {out}")
 
