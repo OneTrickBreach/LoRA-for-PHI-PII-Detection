@@ -15,6 +15,15 @@ def test_trim_spans_strips_leading_space_and_drops_empty():
     assert out == [{"start": 1, "end": 16, "type": "NAME"}]
     assert text[out[0]["start"]:out[0]["end"]] == "Angela Martinez"
 
+
+def test_trim_spans_drops_pure_punctuation():
+    text = "SN-0549 . -"
+    spans = [{"start": 7, "end": 9, "type": "DEVICE_ID"},    # " ." -> punct only, dropped
+             {"start": 10, "end": 11, "type": "MRN"},        # "-" -> dropped
+             {"start": 0, "end": 7, "type": "DEVICE_ID"}]    # "SN-0549" -> kept (has alnum)
+    out = trim_spans(spans, text)
+    assert out == [{"start": 0, "end": 7, "type": "DEVICE_ID"}]
+
 LABELS = bio_label_list()
 ID2LABEL = {i: l for i, l in enumerate(LABELS)}
 B_SSN = LABELS.index("B-SSN")

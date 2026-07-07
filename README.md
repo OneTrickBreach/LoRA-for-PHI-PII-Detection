@@ -34,7 +34,12 @@ eval) — they are the ground truth.
   balanced, per-category-partitioned template bank. Every category ≥300 in train; val/test/hard_test
   cover all 17 categories; **0 leakage across all 4 splits**; regenerates reproducibly. See
   [reports/day6_data_summary.md](reports/day6_data_summary.md). (Retrain on v2 is Day 7.)
-- Day 7–10: see the phase breakdown in [plan.md](plan.md) §11.
+- **Day 7 — DONE.** Retrained on v2 (val token-recall 0.60→0.96) and ran the full comparison on the
+  **hard test set**. On the hard set LoRA Pareto-dominates Presidio (recall 0.557 vs 0.491, precision
+  0.568 vs 0.101, 40 FP vs 1,739) — but **no system meets the 0.97 recall bar**. Error analysis
+  ([reports/error_analysis.md](reports/error_analysis.md)): LoRA owns domain IDs (MRN/DEVICE/VEHICLE/
+  ACCOUNT), rules own format-strong PHI (SSN/IP/DATE) → motivates a hybrid (Day 9).
+- Day 8–10: see the phase breakdown in [plan.md](plan.md) §11.
 
 ## Common commands
 ```bash

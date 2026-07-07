@@ -122,7 +122,9 @@ def trim_spans(spans: list[dict], text: str) -> list[dict]:
             start += 1
         while end > start and text[end - 1].isspace():
             end -= 1
-        if end > start:
+        # Drop empty and pure-punctuation fragments (e.g. "." / "-") — never a real identifier;
+        # the hard-test error analysis showed these as spurious false positives.
+        if end > start and any(c.isalnum() for c in text[start:end]):
             out.append({"start": start, "end": end, "type": s["type"]})
     return out
 

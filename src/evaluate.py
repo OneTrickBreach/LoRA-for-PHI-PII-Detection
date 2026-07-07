@@ -191,8 +191,7 @@ def render_table(results: list[dict], split: str, n_records: int) -> str:
             cells.append("—" if v is None else f"{v:.2f}")
         lines.append(f"| {r['name']} | " + " | ".join(cells) + " |")
 
-    lines.append("\n**Note:** `—` = category not present in this split's gold "
-                 "(v1 val/test coverage is thin by design; Day 6 hard test set fixes this). "
+    lines.append("\n**Note:** `—` = category not present in this split's gold. "
                  "FP on negatives counts predicted spans on look-alike-only records "
                  "(hard-negative false positives).")
     return "\n".join(lines) + "\n"
