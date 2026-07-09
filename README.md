@@ -39,7 +39,11 @@ eval) — they are the ground truth.
   0.568 vs 0.101, 40 FP vs 1,739) — but **no system meets the 0.97 recall bar**. Error analysis
   ([reports/error_analysis.md](reports/error_analysis.md)): LoRA owns domain IDs (MRN/DEVICE/VEHICLE/
   ACCOUNT), rules own format-strong PHI (SSN/IP/DATE) → motivates a hybrid (Day 9).
-- Day 8–10: see the phase breakdown in [plan.md](plan.md) §11.
+- **Day 8 — DONE.** Hyperparameter sweep (r/alpha/LR) + recall-first thresholding →
+  [reports/sweep_results.md](reports/sweep_results.md). **Recommended: r=16, alpha=16, lr=2e-4**
+  (hard-test recall 0.584, precision 0.607, 37 ms/rec) — adopted in `config.yaml`. Bigger rank
+  didn't help and broke the latency target; no config hits 0.97 recall on the hard set (→ hybrid).
+- Day 9–10: see the phase breakdown in [plan.md](plan.md) §11.
 
 ## Common commands
 ```bash

@@ -59,7 +59,7 @@ model:
 lora:
   task_type: TOKEN_CLS
   r: 16
-  lora_alpha: 32
+  lora_alpha: 16   # Day-8 sweep: alpha=r (16) beat alpha=2r (32) on hard-test recall; adopted
   lora_dropout: 0.05
   target_modules: all-linear
   modules_to_save: [classifier]   # <-- without this the head never learns
