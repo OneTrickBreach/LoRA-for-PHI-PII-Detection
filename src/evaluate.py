@@ -233,7 +233,7 @@ def _score_lora(cfg, records, split, target_recall, report) -> list[dict]:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Score PHI/PII detection systems on a split.")
     ap.add_argument("--systems", nargs="+", default=["regex", "presidio"],
-                    choices=["regex", "presidio", "fewshot", "lora"])
+                    choices=["regex", "presidio", "fewshot", "lora", "hybrid"])
     ap.add_argument("--split", default="test", choices=["train", "val", "test", "hard_test"])
     ap.add_argument("--out", default="reports/comparison_table.md")
     args = ap.parse_args()

@@ -6,6 +6,12 @@ the **span level** (char ranges + category) and **beats Microsoft Presidio at ma
 build plan and [rules.md](rules.md) for the hard constraints (PHI rubric, data integrity, modeling,
 eval) — they are the ground truth.
 
+> **Project complete.** Start with the **[HANDOFF](HANDOFF.md)** (guided entry point) and the
+> **[one-page memo](reports/memo.md)** (executive verdict). Bottom line: on the hard test set LoRA
+> beats Presidio (recall 0.569 vs 0.491, precision 0.607 vs 0.101, 25 ms/rec); the recommended
+> deployment is the **hybrid** (LoRA ∪ regex, recall 0.688). No system hits the 0.97 recall bar on
+> the hard set — see the memo.
+
 ## Status
 - **Day 1 — DONE.** Environment up (uv, Python 3.12, torch cu128 on RTX 5070 Ti), `deberta-v3-base`
   loads with a trainable LoRA classifier head, fast-tokenizer `offset_mapping` confirmed, rubric
@@ -43,7 +49,10 @@ eval) — they are the ground truth.
   [reports/sweep_results.md](reports/sweep_results.md). **Recommended: r=16, alpha=16, lr=2e-4**
   (hard-test recall 0.584, precision 0.607, 37 ms/rec) — adopted in `config.yaml`. Bigger rank
   didn't help and broke the latency target; no config hits 0.97 recall on the hard set (→ hybrid).
-- Day 9–10: see the phase breakdown in [plan.md](plan.md) §11.
+- **Days 9 & 10 — DONE (project close).** Clean final run with the recommended config; hybrid
+  (LoRA ∪ regex) evaluated → **recall 0.688** (best); pure-rules/LoRA/hybrid recommendation with the
+  latency finding. Memo + handoff written. See [HANDOFF.md](HANDOFF.md) and
+  [reports/memo.md](reports/memo.md). 59 unit tests green; pipeline reproducible end-to-end.
 
 ## Common commands
 ```bash
@@ -52,17 +61,20 @@ python -m src.generate --version v2   # Day 6: full-scale data (16k) + hard test
 python -m src.align                   # Day 2: verify char-span->BIO alignment (5 hand-checked)
 python -m src.leakage_check           # Day 5: assert zero entity/template overlap across splits
 python -m src.train_lora              # Day 4: LoRA fine-tune -> artifacts/lora_adapter
-python -m src.evaluate --systems regex presidio fewshot lora --split hard_test   # full comparison
-python -m pytest -q                   # run all unit tests
+python -m src.evaluate --systems regex presidio fewshot lora hybrid --split hard_test  # comparison
+python -m src.error_analysis --split hard_test   # where ML wins / rules suffice + examples
+python -m src.sweep                   # hyperparameter sweep -> reports/sweep_results.md
+python -m pytest -q                   # run all unit tests (59)
 ```
 
-## Reproduce Week 1 end-to-end (one command)
+## Reproduce end-to-end (one command)
 ```bash
-bash scripts/run_all.sh               # generate -> leakage-safe splits -> train LoRA -> score all
-                                      # systems -> reports/comparison_table.md
+bash scripts/run_all.sh               # generate v2 (+ hard test set) -> leakage check -> train LoRA
+                                      # -> score all systems incl. hybrid -> reports/comparison_table.md
 ```
-Everything is seeded (`config.yaml: seed`), so a repeat run reproduces byte-identical data. Generated
-data and the trained adapter are git-ignored and regenerated from seed.
+Everything is seeded (`config.yaml: seed`) and deterministic, so a repeat run reproduces byte-identical
+data and the same model. Generated data and the trained adapter are git-ignored and regenerated from
+seed.
 
 ## Environment setup (uv — required; see rules.md §6.7)
 

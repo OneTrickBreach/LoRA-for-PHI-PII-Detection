@@ -24,8 +24,8 @@ rigor + recommendation. Full plan in `plan.md`; hard constraints in `rules.md`.
 | 6 | Data v2 (scale + hard test set) | ✅ |
 | 7 | Retrain + error analysis | ✅ |
 | 8 | Hyperparameter sweep + recall-first thresholding | ✅ |
-| 9 | Final eval + recommendation (incl. hybrid) | ⬜ |
-| 10 | Memo + handoff | ⬜ |
+| 9 | Final eval + recommendation (incl. hybrid) | ✅ |
+| 10 | Memo + handoff | ✅ |
 
 ---
 
@@ -653,3 +653,71 @@ recommendation given SSN/IP/DATE belong to rules and domain-IDs to LoRA); verdic
 with the latency finding. Day 10: write the one-page memo (does LoRA beat Presidio, best config +
 cost + latency, pure-rules/LoRA/hybrid recommendation, synthetic-vs-real caveat + real-data validation
 plan); clean code; prep the walkthrough.
+
+---
+
+## Days 9 + 10 — 2026-07-10 — Final eval, hybrid, memo + handoff (PROJECT CLOSE) ✅
+
+Days 9 and 10 done together to close the project.
+
+**Objective:** clean final run of the recommended config on the hard test set; compare all systems at
+their operating points; evaluate the **hybrid**; give the pure-rules / LoRA / hybrid recommendation
+with the latency finding; write the memo and the submission handoff; update every document.
+
+### What was done
+- **Hybrid predictor** (`HybridPredictor` in `predict.py`): LoRA (argmax) ∪ a precise **regex
+  pre-filter** — union is recall-maximizing (recall leads); the eval harness de-dups overlapping
+  same-type spans. Wired into `evaluate` and `run_all.sh`.
+- **Full end-to-end run** via `scripts/run_all.sh` (now v2 + hard_test): generate → leakage check →
+  **retrain canonical adapter with the recommended config (r16/α16)** → score all 5 systems + hybrid.
+  This was both the final eval and the E2E reproducibility check.
+- **Error analysis refreshed** with the final adapter (+ hybrid column).
+- **[reports/memo.md](reports/memo.md)** — the one-page memo (answers the 3 questions + caveat +
+  real-data validation plan). **[HANDOFF.md](HANDOFF.md)** — the submission-ready, referential entry
+  point linking every artifact.
+- **2 new tests** (hybrid union / recall-union); **59 total, all green.** Updated README, this journal.
+
+### Final verdict — hard test set (n=1,500; overlap)
+| system | recall | precision | binary-R | FP(neg) | latency |
+|---|---|---|---|---|---|
+| regex | 0.292 | 0.237 | 0.533 | 432 | 0.01 ms |
+| presidio (the bar) | 0.491 | 0.101 | 0.916 | 1,739 | 7 ms |
+| few-shot | 0.003 | 0.038 | 0.035 | 9 | 168 ms |
+| **LoRA (r16/α16)** | 0.569 | **0.607** | 0.751 | **38** | 25 ms |
+| **hybrid (LoRA ∪ regex)** | **0.688** | 0.345 | 0.908 | 470 | 24 ms |
+
+- **LoRA beats Presidio decisively:** higher recall AND ~6× precision (0.607 vs 0.101), 38 FP vs
+  1,739, under the 50 ms latency target.
+- **Recall ≥ 0.97 bar:** met **in-distribution** (val recall 0.972 at threshold 0.7) but **not on the
+  hard set** by any system (best = hybrid 0.688). Reported, not hidden.
+- **Recommendation:** **hybrid** for recall-first deployment (best recall, meets latency, 3.4×
+  Presidio precision) + human review; **pure-LoRA** if precision-first; pure-rules insufficient.
+- **Best config:** r=16, α=16, lr=2e-4, 3 epochs — ~7 min train, 21.9 MB adapter, ~3 GB GPU, 25 ms/rec.
+
+### DoD — MET ✅
+Day 9: recommended config + pure-rules/LoRA/hybrid verdict + latency finding (all in the memo &
+comparison table). Day 10: memo + handoff written; docs updated; code clean; 59 tests green.
+
+### Full-project brutal-truth review (end-to-end)
+- **Ran the whole pipeline from scratch** (`run_all.sh`): generate → leakage (0 overlap) → train
+  (deterministic, val recall 0.946) → score. Reproducible end-to-end; the committed numbers come from
+  this run.
+- Re-verified the invariants hold at v2 scale (17.5k records, 0 offset/contains_phi violations — Day
+  6) and that the recall-first threshold is selected on val, never on hard_test.
+- Cross-checked every headline number in the memo/handoff against `comparison_table.json` /
+  `sweep_results.json` — consistent.
+- Confirmed the hybrid's recall gain comes from regex catching SSN/IP/PHONE (per-category table) and
+  its precision cost comes from regex's look-alike FPs (FP(neg) 470 ≈ regex 432) — behaves as designed.
+- Honest limitations restated in the memo: single-seed sweep margins; 100% synthetic incl. hard set;
+  0.97 recall unmet on hard data.
+- **Reconciliation note (found in review):** the sweep reported r16/α16 at hard recall **0.584**, but
+  the canonical retrain of the *same* config gives **0.569**. Cause: residual CUDA nondeterminism
+  (`use_deterministic_algorithms(..., warn_only=True)`) makes results vary slightly across different
+  process/sequence contexts (~0.015) — even though same-invocation reruns are identical (Week-1
+  audit). This is within the flagged single-seed margin; **all final reports use the canonical
+  0.569 consistently** (comparison_table, error_analysis, memo, handoff). Not worth chasing full
+  determinism for a POC; noted for honesty.
+
+### Project close
+All 10 days complete. Week 2 merged to `main`. 59 unit tests green. One-command reproducible.
+Deliverables: synthetic generator + leakage-safe splits, LoRA pipeline + eval harness, memo + handoff.

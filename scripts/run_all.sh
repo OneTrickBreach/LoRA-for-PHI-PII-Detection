@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# One command: generate (if needed) -> train LoRA -> score ALL systems -> emit comparison table.
+# One command: generate v2 (+ hard test set) -> leakage check -> train LoRA -> score ALL systems
+# (incl. hybrid) on the hard test set -> emit comparison table.
 # rules.md §6.1 (one-command runs), §5.7 (one command runs the full comparison).
-# Wired up Day 4; full version Day 9.
 set -euo pipefail
 
 # Activate the uv-managed venv (rules.md §6.7). Works on Windows (Scripts) and POSIX (bin).
@@ -14,18 +14,18 @@ else
   exit 1
 fi
 
-SPLIT="${1:-test}"   # eval split (default: test; Day 6+ uses hard_test)
+SPLIT="${1:-hard_test}"   # eval split (default: hard_test, the verdict set)
 
-echo "==> [1/4] Generate synthetic data (v1)"
-python -m src.generate --version v1
+echo "==> [1/4] Generate synthetic data v2 (16k + 1.5k hard test set)"
+python -m src.generate --version v2
 
 echo "==> [2/4] Leakage check (must pass before any number is trusted)"
 python -m src.leakage_check     # exits non-zero on any cross-split overlap -> stops the run
 
-echo "==> [3/4] Train LoRA on DeBERTa-v3"
+echo "==> [3/4] Train LoRA on DeBERTa-v3 (recommended config from config.yaml)"
 python -m src.train_lora
 
-echo "==> [4/4] Score all systems on '${SPLIT}' -> reports/comparison_table.md"
-python -m src.evaluate --systems regex presidio fewshot lora --split "${SPLIT}"
+echo "==> [4/4] Score all systems (incl. hybrid) on '${SPLIT}' -> reports/comparison_table.md"
+python -m src.evaluate --systems regex presidio fewshot lora hybrid --split "${SPLIT}"
 
 echo "Done. See reports/comparison_table.md"

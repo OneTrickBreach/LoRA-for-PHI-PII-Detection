@@ -23,7 +23,31 @@ def load_predictor(system: str, cfg: dict | None = None, **kwargs):
         return FewShotBaseline(cfg)
     if system == "lora":
         return LoraPredictor(cfg, **kwargs)
+    if system == "hybrid":
+        return HybridPredictor(cfg, **kwargs)
     raise ValueError(f"unknown system: {system}")
+
+
+class HybridPredictor:
+    """Hybrid: LoRA (argmax) UNION a precise rule pre-filter (regex by default) — plan.md §13 stretch,
+    §11 Day 9. Rationale from the error analysis: rules own format-strong PHI (SSN/IP/PHONE/EMAIL/
+    DATE) that LoRA misses in terse/unseen contexts, while LoRA owns the domain identifiers
+    (MRN/DEVICE/VEHICLE/ACCOUNT) that rules can't detect. Taking the union catches a span if EITHER
+    fires — recall-maximizing (recall leads, rules.md §1.4). The eval harness merges overlapping
+    same-type spans, so the union is de-duplicated at scoring time. Presidio is intentionally NOT in
+    the default union (its out-of-box over-flagging would wreck precision — see the comparison)."""
+    name = "hybrid"
+
+    def __init__(self, cfg: dict | None = None, rule_systems: tuple = ("regex",),
+                 adapter_dir: str | None = None, threshold: float | None = None):
+        self.lora = LoraPredictor(cfg, adapter_dir=adapter_dir, threshold=threshold)
+        self.rules = [load_predictor(s, cfg) for s in rule_systems]
+
+    def predict(self, text: str) -> list[dict]:
+        spans = list(self.lora.predict(text))
+        for r in self.rules:
+            spans.extend(r.predict(text))
+        return spans
 
 
 def decode_tokens(raw: list[tuple], id2label: dict[int, str],

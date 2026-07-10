@@ -140,8 +140,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Per-category error analysis for PHI/PII systems.")
     ap.add_argument("--split", default="hard_test",
                     choices=["train", "val", "test", "hard_test"])
-    ap.add_argument("--systems", nargs="+", default=["regex", "presidio", "lora"],
-                    choices=["regex", "presidio", "lora"])
+    ap.add_argument("--systems", nargs="+", default=["regex", "presidio", "lora", "hybrid"],
+                    choices=["regex", "presidio", "lora", "hybrid"])
     ap.add_argument("--out", default="reports/error_analysis.md")
     args = ap.parse_args()
 
